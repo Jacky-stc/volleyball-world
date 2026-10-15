@@ -14,18 +14,18 @@ interface Props {
   onReady: () => void
 }
 function World({ simulation, input, onReady }: Props) {
+  const multiplayer = new URLSearchParams(window.location.search).get('multiplayer') === '1'
   useEffect(() => {
     onReady()
   }, [onReady])
   useFrame((_, delta) => {
-    simulation.advance(delta, input.sample())
+    if (!multiplayer) simulation.advance(delta, input.sample())
   }, -1)
   return (
     <>
       <FixedCamera />
       <PrototypeScene />
-      <CharacterView simulation={simulation} />
-      <RemotePlayers />
+      {multiplayer ? <RemotePlayers input={input} /> : <CharacterView simulation={simulation} />}
     </>
   )
 }
