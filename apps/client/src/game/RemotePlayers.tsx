@@ -21,7 +21,7 @@ function LocalPlayerVisual({ prediction, input }: { prediction: LocalPrediction;
 
   return (
     <group ref={group}>
-      <CharacterVisual />
+      <CharacterVisual animateFromMovement />
     </group>
   )
 }
@@ -52,7 +52,7 @@ function RemotePlayerVisual({ target }: { target: RemotePlayer }) {
       position={spawn.current.position}
       rotation={spawn.current.rotation}
     >
-      <CharacterVisual />
+      <CharacterVisual animateFromMovement />
     </group>
   )
 }
