@@ -3,6 +3,7 @@ import { WebSocketTransport } from '@colyseus/ws-transport'
 import { createServer } from 'node:http'
 import { afterAll, beforeAll, expect, test } from 'vitest'
 import { connect, movementIntent } from '../../client/src/network/connect'
+import { LocalPrediction } from '../../client/src/game/localPrediction'
 import { ConnectionRoom } from '../src/rooms/ConnectionRoom.js'
 
 const http = createServer()
@@ -49,7 +50,7 @@ test('join names are server-owned, sanitized, replicated, and removed on leave',
   }
 })
 
-test('two clients receive bounded authoritative movement, stop, expiry, and disconnect', async () => {
+test('two clients receive bounded authoritative movement, stop, finite durations, and disconnect', async () => {
   const first = await connect(endpoint)
   const second = await connect(endpoint)
   let timer: ReturnType<typeof setInterval> | undefined
@@ -58,12 +59,13 @@ test('two clients receive bounded authoritative movement, stop, expiry, and disc
     expect(second.roomId).toBe(first.roomId)
     await expect.poll(() => second.state?.players.size).toBe(2)
     // Oversized input and extra fields cannot teleport or select another player.
-    const move = () => first.send('move', { sequence: ++sequence, x: 100000, z: -100000, y: 500, speed: 999, sessionId: second.sessionId })
+    const move = () =>
+      first.send('move', [{ sequence: ++sequence, durationMs: 30, x: 100000, z: -100000, y: 500, speed: 999, sessionId: second.sessionId }])
     timer = setInterval(move, 30)
     move()
     await expect.poll(() => second.state.players.get(first.sessionId)?.x ?? 0).toBeGreaterThan(0.2)
     clearInterval(timer)
-    first.send('move', { sequence: ++sequence, x: 0, z: 0 })
+    first.send('move', [{ sequence: ++sequence, durationMs: 10, x: 0, z: 0 }])
     await new Promise((resolve) => setTimeout(resolve, 150))
     const remote = second.state.players.get(first.sessionId)!
     expect(remote.lastProcessedSequence).toBe(sequence)
@@ -78,23 +80,99 @@ test('two clients receive bounded authoritative movement, stop, expiry, and disc
       first.send('move', message)
     }
     for (const invalidSequence of [sequence, sequence - 1, -1, 1.5, '100', Number.MAX_SAFE_INTEGER + 1]) {
-      first.send('move', { x: 1, z: 0, sequence: invalidSequence })
+      first.send('move', [{ x: 1, z: 0, durationMs: 10, sequence: invalidSequence }])
     }
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect({ x: remote.x, z: remote.z }).toEqual(stopped)
     expect(remote.lastProcessedSequence).toBe(sequence)
-    first.send('move', { sequence: ++sequence, x: 1, z: 0 })
+    first.send('move', [{ sequence: ++sequence, durationMs: 50, x: 1, z: 0 }])
     await expect.poll(() => remote.x).toBeGreaterThan(stopped.x)
     await new Promise((resolve) => setTimeout(resolve, 400))
     const expired = remote.x
     await new Promise((resolve) => setTimeout(resolve, 150))
     expect(remote.x).toBe(expired)
-    expect(expired - stopped.x).toBeLessThanOrEqual(2.8 * 0.3)
+    expect(expired - stopped.x).toBeCloseTo(2.8 * 0.05)
     await first.leave()
     await expect.poll(() => second.state.players.has(first.sessionId)).toBe(false)
   } finally {
     clearInterval(timer)
     if (first.connection.isOpen) await first.leave()
     await second.leave()
+  }
+})
+
+// Exercise real 60 Hz simulation and Colyseus patches, including patches with unchanged acks.
+for (const fps of [30, 60, 144]) {
+  test(`prediction stays invariant through authoritative patches at ${fps} fps and 50 ms sends`, async () => {
+    const room = await connect(endpoint)
+    let render: ReturnType<typeof setInterval> | undefined
+    let sender: ReturnType<typeof setInterval> | undefined
+    const prediction = new LocalPrediction()
+    const corrections: number[] = []
+    let patches = 0
+    try {
+      await expect.poll(() => room.state?.players.has(room.sessionId)).toBe(true)
+      prediction.reconcile(room.state.players.get(room.sessionId)!)
+      room.onStateChange(() => {
+        const before = { ...prediction.position }
+        prediction.reconcile(room.state.players.get(room.sessionId)!)
+        corrections.push(Math.hypot(prediction.position.x - before.x, prediction.position.z - before.z))
+        patches++
+      })
+      let frame = 0
+      render = setInterval(() => {
+        // Straight, diagonal, reversal and release all within the same transport model.
+        const phase = Math.floor(frame++ / (fps / 4)) % 4
+        prediction.advance({ horizontal: phase === 2 ? -1 : phase === 3 ? 0 : 1, vertical: phase === 1 ? 1 : 0, run: false }, 1 / fps)
+      }, 1000 / fps)
+      const send = () => {
+        const inputs = prediction.drainInputs()
+        if (inputs.length) room.send('move', inputs)
+      }
+      sender = setInterval(send, 50)
+      await new Promise((resolve) => setTimeout(resolve, 1200))
+      clearInterval(render)
+      clearInterval(sender)
+      send()
+      await expect.poll(() => prediction.pendingCount).toBe(0)
+      expect(patches).toBeGreaterThan(10)
+      expect(Math.max(...corrections)).toBeLessThan(0.00001)
+    } finally {
+      clearInterval(render)
+      clearInterval(sender)
+      await room.leave()
+    }
+  })
+}
+
+test('invalid durations do not consume sequences and command flooding stays bounded by server time', async () => {
+  const room = await connect(endpoint)
+  try {
+    await expect.poll(() => room.state?.players.has(room.sessionId)).toBe(true)
+    const player = room.state.players.get(room.sessionId)!
+    for (const durationMs of [undefined, -1, 0, 101, Infinity, NaN, '50']) {
+      room.send('move', [{ x: 1, z: 0, sequence: 1, durationMs }])
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(player.lastProcessedSequence).toBe(0)
+    expect(player.x).toBe(0)
+    room.send('move', [{ x: 1, z: 0, sequence: 1, durationMs: 50 }])
+    await expect.poll(() => player.lastProcessedSequence).toBe(1)
+    expect(player.x).toBeCloseTo(0.14)
+    const before = player.x
+    const started = performance.now()
+    room.send(
+      'move',
+      Array.from({ length: 64 }, (_, i) => ({ x: 1, z: 0, sequence: i + 2, durationMs: 100 }))
+    )
+    await expect.poll(() => player.lastProcessedSequence).toBe(65)
+    // Includes at most 100 ms of banked credit. Excess queued time expires and is acknowledged.
+    expect(player.x - before).toBeLessThanOrEqual(2.8 * ((performance.now() - started) / 1000 + 0.1))
+    expect(player.x - before).toBeLessThan(2.8)
+    const stopped = player.x
+    await new Promise((resolve) => setTimeout(resolve, 150))
+    expect(player.x).toBe(stopped)
+  } finally {
+    await room.leave()
   }
 })

@@ -132,11 +132,7 @@ export function RemotePlayers({ input }: { input: KeyboardInput }) {
         const localPrediction = new LocalPrediction()
         prediction.current = localPrediction
         setLocalSessionId(joined.sessionId)
-        stopMovement = sendMovement(
-          joined,
-          () => input.sample(),
-          (input) => localPrediction.sequenceInput(input)
-        )
+        stopMovement = sendMovement(joined, () => localPrediction.drainInputs())
         update = () => {
           const players = joined.state?.players
           if (!players) return

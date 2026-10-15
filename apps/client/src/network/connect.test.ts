@@ -7,7 +7,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-it('sequences immediate, periodic, blur and visibility intents without sending transforms', () => {
+it('batches predicted commands periodically and flushes on blur and visibility without sending transforms', () => {
   vi.useFakeTimers()
   const windowEvents = new EventTarget()
   const documentEvents = new EventTarget()
@@ -21,21 +21,30 @@ it('sequences immediate, periodic, blur and visibility intents without sending t
   Object.assign(documentEvents, { hidden: true })
   const send = vi.fn()
   const prediction = new LocalPrediction()
-  const stop = sendMovement(
-    { send } as unknown as Parameters<typeof sendMovement>[0],
-    () => ({ horizontal: 1, vertical: 0, run: true }),
-    (input) => prediction.sequenceInput(input)
-  )
+  const right = { horizontal: 1, vertical: 0, run: true }
+  prediction.advance(right, 0.01)
+  const stop = sendMovement({ send } as unknown as Parameters<typeof sendMovement>[0], () => prediction.drainInputs())
+  prediction.advance(right, 0.02)
+  prediction.advance(right, 0.03)
   vi.advanceTimersByTime(50)
+  prediction.advance(right, 0.01)
   windowEvents.dispatchEvent(new Event('blur'))
+  prediction.advance(right, 0.01)
   documentEvents.dispatchEvent(new Event('visibilitychange'))
   expect(send.mock.calls).toEqual([
-    ['move', { x: 1, z: -0, sequence: 1 }],
-    ['move', { x: 1, z: -0, sequence: 2 }],
-    ['move', { x: 0, z: -0, sequence: 3 }],
-    ['move', { x: 0, z: -0, sequence: 4 }],
+    ['move', [{ x: 1, z: -0, durationMs: 10, sequence: 1 }]],
+    [
+      'move',
+      [
+        { x: 1, z: -0, durationMs: 20, sequence: 2 },
+        { x: 1, z: -0, durationMs: 30, sequence: 3 },
+      ],
+    ],
+    ['move', [{ x: 1, z: -0, durationMs: 10, sequence: 4 }]],
+    ['move', [{ x: 1, z: -0, durationMs: 10, sequence: 5 }]],
   ])
   stop()
+  prediction.advance(right, 0.01)
   vi.advanceTimersByTime(100)
   windowEvents.dispatchEvent(new Event('blur'))
   documentEvents.dispatchEvent(new Event('visibilitychange'))

@@ -14,40 +14,41 @@ type Transform = Pick<PlayerState, 'x' | 'y' | 'z' | 'rotation'>
 
 export class LocalPrediction {
   readonly position: Transform = { x: 0, y: 0, z: 0, rotation: 0 }
-  // One integrated displacement per send interval, including the current unsent interval.
-  // These values are presentation-only and are never sent to the server.
-  private pending = new Map<number, { x: number; z: number }>()
+  private pending = new Map<number, MovementMessage>()
+  private unsent: MovementMessage[] = []
   private nextSequence = 1
 
   get pendingCount() {
     return this.pending.size
   }
 
-  sequenceInput(input: PlayerInput): MovementMessage {
-    return { ...movementIntent(input), sequence: this.nextSequence++ }
+  drainInputs(): MovementMessage[] {
+    const inputs = this.unsent
+    this.unsent = []
+    return inputs
   }
 
   advance(input: PlayerInput, delta: number) {
-    const displacement = { x: 0, z: 0 }
-    advanceLocalPrediction(displacement, input, delta)
-    this.position.x += displacement.x
-    this.position.z += displacement.z
-    if (displacement.x === 0 && displacement.z === 0) return
-    const pending = this.pending.get(this.nextSequence) ?? { x: 0, z: 0 }
-    pending.x += displacement.x
-    pending.z += displacement.z
-    this.pending.set(this.nextSequence, pending)
+    // Bound stalled/background frames just as the server bounds catch-up time.
+    const durationMs = Math.max(0, Math.min(delta * 1000, 100))
+    if (!Number.isFinite(durationMs) || durationMs === 0) return
+    const command = { ...movementIntent(input), durationMs, sequence: this.nextSequence++ }
+    this.pending.set(command.sequence, command)
+    this.unsent.push(command)
+    this.apply(command)
+  }
+
+  private apply(command: MovementMessage) {
+    this.position.x += command.x * MOVEMENT_SPEED * (command.durationMs / 1000)
+    this.position.z += command.z * MOVEMENT_SPEED * (command.durationMs / 1000)
   }
 
   reconcile(authoritative: Pick<PlayerState, 'x' | 'y' | 'z' | 'rotation' | 'lastProcessedSequence'>) {
     const { x, y, z, rotation, lastProcessedSequence } = authoritative
     Object.assign(this.position, { x, y, z, rotation })
-    for (const [sequence, displacement] of this.pending) {
+    for (const [sequence, command] of this.pending) {
       if (sequence <= lastProcessedSequence) this.pending.delete(sequence)
-      else {
-        this.position.x += displacement.x
-        this.position.z += displacement.z
-      }
+      else this.apply(command)
     }
   }
 }
