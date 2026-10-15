@@ -2,22 +2,11 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useRef, useState } from 'react'
 import type { Group } from 'three'
 import { connect, sendMovement } from '../network/connect'
+import { CharacterVisual } from './character/CharacterVisual'
 import type { KeyboardInput } from './input/KeyboardInput'
 import { LocalPrediction } from './localPrediction'
 
 type RemotePlayer = { sessionId: string; x: number; y: number; z: number; rotation: number }
-
-function PlayerPlaceholder({ local = false }: { local?: boolean }) {
-  return (
-    <mesh
-      position={[0, 0.9, 0]}
-      castShadow
-    >
-      <boxGeometry args={[0.65, 1.8, 0.45]} />
-      <meshStandardMaterial color={local ? '#ffcf55' : '#55d6ea'} />
-    </mesh>
-  )
-}
 
 function LocalPlayerVisual({ prediction, input }: { prediction: LocalPrediction; input: KeyboardInput }) {
   const group = useRef<Group>(null)
@@ -32,7 +21,7 @@ function LocalPlayerVisual({ prediction, input }: { prediction: LocalPrediction;
 
   return (
     <group ref={group}>
-      <PlayerPlaceholder local />
+      <CharacterVisual />
     </group>
   )
 }
@@ -63,7 +52,7 @@ function RemotePlayerVisual({ target }: { target: RemotePlayer }) {
       position={spawn.current.position}
       rotation={spawn.current.rotation}
     >
-      <PlayerPlaceholder />
+      <CharacterVisual />
     </group>
   )
 }
