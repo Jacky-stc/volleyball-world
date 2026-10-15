@@ -39,7 +39,7 @@ export class LocalPrediction {
     this.pending.set(this.nextSequence, pending)
   }
 
-  reconcile(authoritative: PlayerState) {
+  reconcile(authoritative: Pick<PlayerState, 'x' | 'y' | 'z' | 'rotation' | 'lastProcessedSequence'>) {
     const { x, y, z, rotation, lastProcessedSequence } = authoritative
     Object.assign(this.position, { x, y, z, rotation })
     for (const [sequence, displacement] of this.pending) {

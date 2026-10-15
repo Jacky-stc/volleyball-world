@@ -2,7 +2,7 @@ import { Room, type Client } from '@colyseus/core'
 import { schema, t } from '@colyseus/schema'
 
 const PlayerState = schema(
-  { x: t.number(), y: t.number(), z: t.number(), rotation: t.number(), lastProcessedSequence: t.number() },
+  { x: t.number(), y: t.number(), z: t.number(), rotation: t.number(), lastProcessedSequence: t.number(), displayName: t.string() },
   'PlayerState'
 )
 const ConnectionState = schema({ players: t.map(PlayerState) }, 'ConnectionState')
@@ -10,6 +10,18 @@ const ConnectionState = schema({ players: t.map(PlayerState) }, 'ConnectionState
 const TICK_MS = 1000 / 60
 const MOVEMENT_SPEED = 2.8
 const INPUT_TIMEOUT_MS = 250
+const DEFAULT_DISPLAY_NAME = 'Player'
+const MAX_DISPLAY_NAME_LENGTH = 20
+
+function displayNameFromOptions(options: unknown) {
+  const value = options && typeof options === 'object' && 'displayName' in options ? options.displayName : undefined
+  if (typeof value !== 'string') return DEFAULT_DISPLAY_NAME
+  const name = value
+    .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return Array.from(name).slice(0, MAX_DISPLAY_NAME_LENGTH).join('') || DEFAULT_DISPLAY_NAME
+}
 
 type Movement = { x: number; z: number; sequence: number; receivedAt: number }
 
@@ -57,8 +69,11 @@ export class ConnectionRoom extends Room<{ state: InstanceType<typeof Connection
     }, TICK_MS)
   }
 
-  onJoin(client: Client) {
-    this.state.players.set(client.sessionId, new PlayerState({ x: 0, y: 0, z: 0, rotation: 0, lastProcessedSequence: 0 }))
+  onJoin(client: Client, options: unknown) {
+    this.state.players.set(
+      client.sessionId,
+      new PlayerState({ x: 0, y: 0, z: 0, rotation: 0, lastProcessedSequence: 0, displayName: displayNameFromOptions(options) })
+    )
   }
 
   onLeave(client: Client) {

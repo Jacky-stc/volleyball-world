@@ -26,6 +26,29 @@ test('input preserves direction and normalizes diagonals without sending speed o
   expect(Math.hypot(diagonal.x, diagonal.z)).toBeCloseTo(1)
 })
 
+test('join names are server-owned, sanitized, replicated, and removed on leave', async () => {
+  const first = await connect(endpoint, '  Alice  ')
+  const second = await connect(endpoint, '  Bob\nSmith  ')
+  const empty = await connect(endpoint, ' \n ')
+  const long = await connect(endpoint, 'A'.repeat(30))
+  const invalid = await connect(endpoint, 42 as unknown as string)
+  try {
+    await expect.poll(() => second.state.players.get(first.sessionId)?.displayName).toBe('Alice')
+    await expect.poll(() => first.state?.players.get(second.sessionId)?.displayName).toBe('Bob Smith')
+    await expect.poll(() => empty.state?.players.get(empty.sessionId)?.displayName).toBe('Player')
+    await expect.poll(() => long.state?.players.get(long.sessionId)?.displayName).toBe('A'.repeat(20))
+    await expect.poll(() => invalid.state?.players.get(invalid.sessionId)?.displayName).toBe('Player')
+    await first.leave()
+    await expect.poll(() => second.state.players.has(first.sessionId)).toBe(false)
+  } finally {
+    if (first.connection.isOpen) await first.leave()
+    await second.leave()
+    await empty.leave()
+    await long.leave()
+    await invalid.leave()
+  }
+})
+
 test('two clients receive bounded authoritative movement, stop, expiry, and disconnect', async () => {
   const first = await connect(endpoint)
   const second = await connect(endpoint)

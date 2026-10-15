@@ -1,14 +1,14 @@
 import { Client } from '@colyseus/sdk'
 import type { PlayerInput } from '@volleyball/game-core'
 
-export type PlayerState = { x: number; y: number; z: number; rotation: number; lastProcessedSequence: number }
+export type PlayerState = { x: number; y: number; z: number; rotation: number; lastProcessedSequence: number; displayName: string }
 export type MovementMessage = { x: number; z: number; sequence: number }
 type ConnectionState = { players: Map<string, PlayerState> }
 
 // Explicit opt-in: offline gameplay never opens a network connection.
 // The caller owns the returned room and must call room.leave() when finished.
-export async function connect(endpoint = 'http://localhost:2567') {
-  return new Client(endpoint).joinOrCreate<ConnectionState>('connection')
+export async function connect(endpoint = 'http://localhost:2567', displayName = 'Player') {
+  return new Client(endpoint).joinOrCreate<ConnectionState>('connection', { displayName })
 }
 
 export function movementIntent(input: PlayerInput) {
