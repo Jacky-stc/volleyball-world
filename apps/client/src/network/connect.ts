@@ -1,7 +1,8 @@
 import { Client } from '@colyseus/sdk'
 import type { PlayerInput } from '@volleyball/game-core'
 
-type PlayerState = { x: number; y: number; z: number; rotation: number }
+export type PlayerState = { x: number; y: number; z: number; rotation: number; lastProcessedSequence: number }
+export type MovementMessage = { x: number; z: number; sequence: number }
 type ConnectionState = { players: Map<string, PlayerState> }
 
 // Explicit opt-in: offline gameplay never opens a network connection.
@@ -16,9 +17,13 @@ export function movementIntent(input: PlayerInput) {
 }
 
 // Input transport only: transforms are received exclusively through room state.
-export function sendMovement(room: Awaited<ReturnType<typeof connect>>, sample: () => PlayerInput) {
-  const send = () => room.send('move', movementIntent(sample()))
-  const stop = () => room.send('move', { x: 0, z: 0 })
+export function sendMovement(
+  room: Awaited<ReturnType<typeof connect>>,
+  sample: () => PlayerInput,
+  sequenceInput: (input: PlayerInput) => MovementMessage
+) {
+  const send = () => room.send('move', sequenceInput(sample()))
+  const stop = () => room.send('move', sequenceInput({ horizontal: 0, vertical: 0, run: false }))
   const visibility = () => {
     if (document.hidden) stop()
   }

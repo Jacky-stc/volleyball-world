@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Group } from 'three'
 import { connect, sendMovement } from '../network/connect'
 import type { KeyboardInput } from './input/KeyboardInput'
+import { LocalPrediction } from './localPrediction'
 
 type RemotePlayer = { sessionId: string; x: number; y: number; z: number; rotation: number }
 
@@ -15,6 +16,24 @@ function PlayerPlaceholder({ local = false }: { local?: boolean }) {
       <boxGeometry args={[0.65, 1.8, 0.45]} />
       <meshStandardMaterial color={local ? '#ffcf55' : '#55d6ea'} />
     </mesh>
+  )
+}
+
+function LocalPlayerVisual({ prediction, input }: { prediction: LocalPrediction; input: KeyboardInput }) {
+  const group = useRef<Group>(null)
+
+  useFrame((_, delta) => {
+    prediction.advance(input.sample(), delta)
+    const visual = group.current
+    if (!visual) return
+    visual.position.set(prediction.position.x, prediction.position.y, prediction.position.z)
+    visual.rotation.y = prediction.position.rotation
+  })
+
+  return (
+    <group ref={group}>
+      <PlayerPlaceholder local />
+    </group>
   )
 }
 
@@ -52,6 +71,7 @@ function RemotePlayerVisual({ target }: { target: RemotePlayer }) {
 export function RemotePlayers({ input }: { input: KeyboardInput }) {
   const [players, setPlayers] = useState<RemotePlayer[]>([])
   const [localSessionId, setLocalSessionId] = useState<string>()
+  const prediction = useRef(new LocalPrediction())
 
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('multiplayer') !== '1') return
@@ -72,11 +92,19 @@ export function RemotePlayers({ input }: { input: KeyboardInput }) {
           return
         }
         room = joined
+        const localPrediction = new LocalPrediction()
+        prediction.current = localPrediction
         setLocalSessionId(joined.sessionId)
-        stopMovement = sendMovement(joined, () => input.sample())
+        stopMovement = sendMovement(
+          joined,
+          () => input.sample(),
+          (input) => localPrediction.sequenceInput(input)
+        )
         update = () => {
           const players = joined.state?.players
           if (!players) return
+          const local = players.get(joined.sessionId)
+          if (local) localPrediction.reconcile(local)
           setPlayers(
             Array.from(players, ([sessionId, transform]) => ({
               sessionId,
@@ -111,13 +139,11 @@ export function RemotePlayers({ input }: { input: KeyboardInput }) {
         target={player}
       />
     ) : (
-      <group
+      <LocalPlayerVisual
         key={player.sessionId}
-        position={[player.x, player.y, player.z]}
-        rotation={[0, player.rotation, 0]}
-      >
-        <PlayerPlaceholder local />
-      </group>
+        prediction={prediction.current}
+        input={input}
+      />
     )
   )
 }
