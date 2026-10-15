@@ -3,6 +3,7 @@ import { KeyboardInput } from '../game/input/KeyboardInput'
 import { SceneManager } from '../game/scenes/SceneManager'
 import type { LocalSimulation } from '../game/simulation/LocalSimulation'
 import { connect, limitDisplayName, type JoinedRoom } from '../network/connect'
+import { ChatPanel } from './ChatPanel'
 
 const Game = lazy(() => import('../game/Game'))
 
@@ -130,6 +131,12 @@ export function App() {
             />
           </Suspense>
         </WorldBoundary>
+      )}
+      {room && joinState === 'joined' && (
+        <ChatPanel
+          key={room.sessionId}
+          room={room}
+        />
       )}
       {!multiplayer && ready && !error && (
         <button

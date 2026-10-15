@@ -50,6 +50,46 @@ test('join names are server-owned, sanitized, replicated, and removed on leave',
   }
 })
 
+test('chat broadcasts validated text with server-owned sender identity and survives reconnect', async () => {
+  const first = await connect(endpoint, '  Alice  ')
+  const second = await connect(endpoint, 'Bob')
+  const firstMessages: unknown[] = []
+  const secondMessages: unknown[] = []
+  const stopFirst = first.onMessage('chat', (message: unknown) => firstMessages.push(message))
+  const stopSecond = second.onMessage('chat', (message: unknown) => secondMessages.push(message))
+  let rejoined: Awaited<ReturnType<typeof connect>> | undefined
+  try {
+    await expect.poll(() => second.state?.players.size).toBe(2)
+    first.send('chat', '  Hello   Bob  ')
+    const hello = { sessionId: first.sessionId, displayName: 'Alice', text: 'Hello Bob' }
+    await expect.poll(() => secondMessages).toEqual([hello])
+    await expect.poll(() => firstMessages).toEqual([hello])
+
+    for (const invalid of [' \n ', 'x'.repeat(201), { text: 'Forged', displayName: 'Bob' }, 42]) first.send('chat', invalid)
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(secondMessages).toEqual([hello])
+
+    second.send('chat', '  Hi Alice  ')
+    const reply = { sessionId: second.sessionId, displayName: 'Bob', text: 'Hi Alice' }
+    await expect.poll(() => firstMessages).toEqual([hello, reply])
+    await expect.poll(() => secondMessages).toEqual([hello, reply])
+
+    await first.leave()
+    rejoined = await connect(endpoint, 'Alice Again')
+    await expect.poll(() => second.state.players.has(rejoined!.sessionId)).toBe(true)
+    rejoined.send('chat', 'Back')
+    await expect
+      .poll(() => secondMessages)
+      .toEqual([hello, reply, { sessionId: rejoined!.sessionId, displayName: 'Alice Again', text: 'Back' }])
+  } finally {
+    stopFirst()
+    stopSecond()
+    if (first.connection.isOpen) await first.leave()
+    await second.leave()
+    if (rejoined) await rejoined.leave()
+  }
+})
+
 test('two clients receive bounded authoritative movement, stop, finite durations, and disconnect', async () => {
   const first = await connect(endpoint)
   const second = await connect(endpoint)

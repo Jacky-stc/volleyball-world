@@ -12,6 +12,7 @@ const MOVEMENT_SPEED = 2.8
 const INPUT_TIMEOUT_MS = 250
 const DEFAULT_DISPLAY_NAME = 'Player'
 const MAX_DISPLAY_NAME_LENGTH = 20
+const MAX_CHAT_LENGTH = 200
 
 function displayNameFromOptions(options: unknown) {
   const value = options && typeof options === 'object' && 'displayName' in options ? options.displayName : undefined
@@ -31,6 +32,17 @@ export class ConnectionRoom extends Room<{ state: InstanceType<typeof Connection
   private movementInputs = new Map<string, MovementQueue>()
 
   onCreate() {
+    this.onMessage('chat', (client, message: unknown) => {
+      const player = this.state.players.get(client.sessionId)
+      if (!player || typeof message !== 'string' || message.length > MAX_CHAT_LENGTH * 2) return
+      const text = message
+        .replace(/[\p{Cc}\p{Cf}]/gu, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+      if (!text || Array.from(text).length > MAX_CHAT_LENGTH) return
+      this.broadcast('chat', { sessionId: client.sessionId, displayName: player.displayName, text })
+    })
+
     this.onMessage('move', (client, message: unknown) => {
       const player = this.state.players.get(client.sessionId)
       if (!player) return

@@ -3,6 +3,7 @@ import type { PlayerInput } from '@volleyball/game-core'
 
 export type PlayerState = { x: number; y: number; z: number; rotation: number; lastProcessedSequence: number; displayName: string }
 export type MovementMessage = { x: number; z: number; sequence: number; durationMs: number }
+export type ChatEvent = { sessionId: string; displayName: string; text: string }
 type ConnectionState = { players: Map<string, PlayerState> }
 
 export function limitDisplayName(value: string) {
@@ -16,6 +17,13 @@ export async function connect(endpoint = 'http://localhost:2567', displayName = 
 }
 
 export type JoinedRoom = Awaited<ReturnType<typeof connect>>
+
+export function sendChat(room: JoinedRoom, message: string) {
+  const text = message.trim()
+  if (!text) return false
+  room.send('chat', text)
+  return true
+}
 
 export function movementIntent(input: PlayerInput) {
   const x = Math.max(-1, Math.min(1, input.horizontal))

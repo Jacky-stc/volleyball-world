@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { LocalPrediction } from '../game/localPrediction'
-import { limitDisplayName, sendMovement } from './connect'
+import { limitDisplayName, sendChat, sendMovement } from './connect'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -9,6 +9,14 @@ afterEach(() => {
 
 it('limits a display name to 20 Unicode code points', () => {
   expect(limitDisplayName('😀'.repeat(21))).toBe('😀'.repeat(20))
+})
+
+it('sends trimmed chat text and ignores empty input', () => {
+  const send = vi.fn()
+  const room = { send } as unknown as Parameters<typeof sendChat>[0]
+  expect(sendChat(room, '  Hello  ')).toBe(true)
+  expect(sendChat(room, ' \n ')).toBe(false)
+  expect(send).toHaveBeenCalledExactlyOnceWith('chat', 'Hello')
 })
 
 it('batches predicted commands periodically and flushes on blur and visibility without sending transforms', () => {

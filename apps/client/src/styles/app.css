@@ -98,6 +98,55 @@ canvas {
 .join-form p {
   margin: 0;
 }
+.chat-panel {
+  position: absolute;
+  bottom: 1rem;
+  left: 1rem;
+  width: min(22rem, calc(100% - 2rem));
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  color: #fff;
+  background: rgba(15, 41, 46, 0.85);
+  touch-action: auto;
+}
+.chat-panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+}
+.chat-messages {
+  height: 9rem;
+  margin: 0 0 0.5rem;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  overflow-wrap: anywhere;
+}
+.chat-messages li + li {
+  margin-top: 0.25rem;
+}
+.chat-panel form {
+  display: flex;
+  gap: 0.5rem;
+}
+.chat-panel input {
+  min-width: 0;
+  flex: 1;
+  padding: 0.5rem;
+  border: 0;
+  border-radius: 0.25rem;
+  font: inherit;
+}
+.chat-panel button {
+  border: 0;
+  border-radius: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  font: inherit;
+  cursor: pointer;
+}
+.chat-panel button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);
