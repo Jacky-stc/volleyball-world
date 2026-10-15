@@ -4,6 +4,7 @@ import { ACESFilmicToneMapping } from 'three'
 import { FixedCamera } from './camera/FixedCamera'
 import { CharacterView } from './character/CharacterView'
 import type { KeyboardInput } from './input/KeyboardInput'
+import { RemotePlayers } from './RemotePlayers'
 import { PrototypeScene } from './scenes/PrototypeScene'
 import type { LocalSimulation } from './simulation/LocalSimulation'
 
@@ -24,6 +25,7 @@ function World({ simulation, input, onReady }: Props) {
       <FixedCamera />
       <PrototypeScene />
       <CharacterView simulation={simulation} />
+      <RemotePlayers />
     </>
   )
 }

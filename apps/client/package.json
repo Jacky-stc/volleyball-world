@@ -9,6 +9,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@colyseus/sdk": "^0.18.5",
     "@dimforge/rapier3d-compat": "^0.21.0",
     "@react-three/fiber": "^9.8.1",
     "@volleyball/game-core": "workspace:*",

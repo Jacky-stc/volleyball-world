@@ -5,7 +5,8 @@
   "packageManager": "pnpm@11.19.0",
   "scripts": {
     "dev": "pnpm --filter @volleyball/client dev",
-    "build": "pnpm typecheck && pnpm --filter @volleyball/client build",
+    "dev:server": "pnpm --filter @volleyball/server dev",
+    "build": "pnpm typecheck && pnpm -r build",
     "preview": "pnpm --filter @volleyball/client preview",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
