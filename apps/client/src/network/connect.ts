@@ -1,5 +1,6 @@
 import { Client } from '@colyseus/sdk'
 import type { PlayerInput } from '@volleyball/game-core'
+import { isWithinCourtInteraction } from '@volleyball/game-core/court'
 
 export type PlayerState = { x: number; y: number; z: number; rotation: number; lastProcessedSequence: number; displayName: string }
 export type MovementMessage = { x: number; z: number; sequence: number; durationMs: number }
@@ -17,6 +18,17 @@ export async function connect(endpoint = 'http://localhost:2567', displayName = 
 }
 
 export type JoinedRoom = Awaited<ReturnType<typeof connect>>
+
+export function canRequestMatch(room: JoinedRoom) {
+  const player = room.state?.players.get(room.sessionId)
+  return room.connection.isOpen && !!player && isWithinCourtInteraction(player)
+}
+
+export function requestMatch(room: JoinedRoom) {
+  if (!canRequestMatch(room)) return false
+  room.send('match:join', null)
+  return true
+}
 
 export function sendChat(room: JoinedRoom, message: string) {
   const text = message.trim()

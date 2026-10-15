@@ -4,6 +4,7 @@ import { SceneManager } from '../game/scenes/SceneManager'
 import type { LocalSimulation } from '../game/simulation/LocalSimulation'
 import { connect, limitDisplayName, type JoinedRoom } from '../network/connect'
 import { ChatPanel } from './ChatPanel'
+import { CourtInteraction } from './CourtInteraction'
 
 const Game = lazy(() => import('../game/Game'))
 
@@ -131,6 +132,13 @@ export function App() {
             />
           </Suspense>
         </WorldBoundary>
+      )}
+      {room && joinState === 'joined' && ready && !error && (
+        <CourtInteraction
+          key={room.sessionId}
+          room={room}
+          input={input}
+        />
       )}
       {room && joinState === 'joined' && (
         <ChatPanel

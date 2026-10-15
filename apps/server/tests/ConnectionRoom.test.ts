@@ -5,6 +5,7 @@ import { afterAll, beforeAll, expect, test } from 'vitest'
 import { connect, movementIntent } from '../../client/src/network/connect'
 import { LocalPrediction } from '../../client/src/game/localPrediction'
 import { ConnectionRoom } from '../src/rooms/ConnectionRoom.js'
+import type { MatchEntryResult } from '@volleyball/game-core/court'
 
 const http = createServer()
 const server = new Server({ transport: new WebSocketTransport({ server: http }), greet: false })
@@ -20,6 +21,54 @@ beforeAll(async () => {
 afterAll(async () => {
   await server.gracefullyShutdown(false)
 })
+
+test('court entry validates authoritative range, owns two seats, and releases on disconnect without leaving social', async () => {
+  const rooms = await Promise.all([connect(endpoint), connect(endpoint), connect(endpoint)])
+  const replies: MatchEntryResult[][] = rooms.map(() => [])
+  const stops = rooms.map((room, i) => room.onMessage<MatchEntryResult>('match:entry', (reply) => replies[i]!.push(reply)))
+  let timer: ReturnType<typeof setInterval> | undefined
+  try {
+    await expect.poll(() => rooms[0]!.state?.players.size).toBe(3)
+    rooms[0]!.send('match:join', { x: 0, z: 9, seat: 1, sessionId: rooms[1]!.sessionId })
+    rooms[0]!.send('match:join', null)
+    await expect
+      .poll(() => replies[0])
+      .toEqual([
+        { status: 'rejected', reason: 'invalid-request' },
+        { status: 'rejected', reason: 'out-of-range' },
+      ])
+    let sequence = 0
+    timer = setInterval(() => {
+      sequence++
+      for (const room of rooms) room.send('move', [{ x: 0, z: 1, durationMs: 50, sequence }])
+    }, 50)
+    await expect.poll(() => rooms.every((room) => (room.state?.players.get(room.sessionId)?.z ?? 0) >= 7.2), { timeout: 5000 }).toBe(true)
+    clearInterval(timer)
+    rooms[0]!.send('match:join', null)
+    await expect.poll(() => replies[0]!.at(-1)?.status).toBe('accepted')
+    const first = replies[0]!.at(-1)!
+    rooms[0]!.send('match:join', null)
+    await expect.poll(() => replies[0]!.length).toBe(4)
+    expect(replies[0]!.at(-1)).toEqual(first)
+    rooms[1]!.send('match:join', null)
+    await expect.poll(() => replies[1]!.at(-1)).toEqual({ ...first, seat: 2 })
+    rooms[2]!.send('match:join', null)
+    await expect.poll(() => replies[2]!.at(-1)).toEqual({ status: 'rejected', reason: 'full' })
+    expect(rooms[1]!.state.players.size).toBe(3)
+    await rooms[0]!.leave()
+    await expect.poll(() => rooms[1]!.state.players.size).toBe(2)
+    rooms[2]!.send('match:join', null)
+    await expect.poll(() => replies[2]!.at(-1)).toEqual(first)
+    const chat: unknown[] = []
+    rooms[1]!.onMessage('chat', (message) => chat.push(message))
+    rooms[2]!.send('chat', 'Still social')
+    await expect.poll(() => chat.length).toBe(1)
+  } finally {
+    clearInterval(timer)
+    stops.forEach((stop) => stop())
+    await Promise.all(rooms.filter((room) => room.connection.isOpen).map((room) => room.leave()))
+  }
+}, 10000)
 
 test('input preserves direction and normalizes diagonals without sending speed or position', () => {
   expect(movementIntent({ horizontal: 0, vertical: 1, run: true })).toEqual({ x: 0, z: -1 })

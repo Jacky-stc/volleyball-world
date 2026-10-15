@@ -1,5 +1,7 @@
 import { Room, type Client } from '@colyseus/core'
 import { schema, t } from '@colyseus/schema'
+import { isWithinCourtInteraction } from '@volleyball/game-core/court'
+import { VolleyballMatch } from '../matches/VolleyballMatch.js'
 
 const PlayerState = schema(
   { x: t.number(), y: t.number(), z: t.number(), rotation: t.number(), lastProcessedSequence: t.number(), displayName: t.string() },
@@ -30,8 +32,24 @@ type MovementQueue = { commands: Movement[]; latestSequence: number; creditMs: n
 export class ConnectionRoom extends Room<{ state: InstanceType<typeof ConnectionState> }> {
   state = new ConnectionState()
   private movementInputs = new Map<string, MovementQueue>()
+  private match = new VolleyballMatch()
 
   onCreate() {
+    this.onMessage('match:join', (client, message: unknown) => {
+      const player = this.state.players.get(client.sessionId)
+      if (!player) return
+      // No client-selected identity, position, room, or seat is accepted.
+      if (message !== null) {
+        client.send('match:entry', { status: 'rejected', reason: 'invalid-request' })
+        return
+      }
+      if (!isWithinCourtInteraction(player)) {
+        client.send('match:entry', { status: 'rejected', reason: 'out-of-range' })
+        return
+      }
+      client.send('match:entry', this.match.join(client.sessionId))
+    })
+
     this.onMessage('chat', (client, message: unknown) => {
       const player = this.state.players.get(client.sessionId)
       if (!player || typeof message !== 'string' || message.length > MAX_CHAT_LENGTH * 2) return
@@ -103,6 +121,7 @@ export class ConnectionRoom extends Room<{ state: InstanceType<typeof Connection
   }
 
   onLeave(client: Client) {
+    this.match.leave(client.sessionId)
     this.movementInputs.delete(client.sessionId)
     this.state.players.delete(client.sessionId)
   }

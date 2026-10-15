@@ -87,6 +87,9 @@ importers:
       '@colyseus/ws-transport':
         specifier: ^0.18.4
         version: 0.18.4(@colyseus/core@0.18.18)(express@5.3.0)
+      '@volleyball/game-core':
+        specifier: workspace:*
+        version: link:../../packages/game-core
 
   packages/game-core: {}
 

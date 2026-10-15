@@ -1,9 +1,11 @@
+import { courtDimensions } from '@volleyball/game-core/court'
+export { courtDimensions } from '@volleyball/game-core/court'
+
 export interface BoxCollider {
   center: [number, number, number]
   halfExtents: [number, number, number]
 }
 
-export const courtDimensions = { width: 9, length: 18, apron: 3, netHeight: 2.43 }
 const halfWidth = courtDimensions.width / 2 + courtDimensions.apron
 const halfLength = courtDimensions.length / 2 + courtDimensions.apron
 export const courtScene = {

@@ -7,10 +7,15 @@ export class KeyboardInput {
   private touch = new Set<string>()
   private running = false
   private enabled = true
+  private courtInteraction?: () => void
   private down = (event: KeyboardEvent) => {
     if (!this.enabled || event.ctrlKey || event.metaKey || event.altKey) return
     if (event.target instanceof HTMLElement && (event.target.isContentEditable || /INPUT|TEXTAREA|SELECT/.test(event.target.tagName)))
       return
+    if (event.code === 'KeyE' && !event.repeat && this.courtInteraction) {
+      event.preventDefault()
+      this.courtInteraction()
+    }
     if (movementKeys.has(event.code)) {
       event.preventDefault()
       this.keys.add(event.code)
@@ -43,6 +48,12 @@ export class KeyboardInput {
   setEnabled(enabled: boolean) {
     this.enabled = enabled
     this.clear()
+  }
+  onCourtInteraction(callback: () => void) {
+    this.courtInteraction = callback
+    return () => {
+      if (this.courtInteraction === callback) this.courtInteraction = undefined
+    }
   }
   setTouch(key: string, pressed: boolean) {
     if (pressed) this.touch.add(key)

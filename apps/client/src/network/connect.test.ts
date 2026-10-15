@@ -1,6 +1,33 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { LocalPrediction } from '../game/localPrediction'
-import { limitDisplayName, sendChat, sendMovement } from './connect'
+import { canRequestMatch, requestMatch, limitDisplayName, sendChat, sendMovement } from './connect'
+
+it('only sends empty match intent for the connected local player in range', () => {
+  const send = vi.fn()
+  const player = { x: 0, z: 0 }
+  const room = {
+    send,
+    sessionId: 'local',
+    connection: { isOpen: true },
+    state: {
+      players: new Map([
+        ['local', player],
+        ['remote', { x: 0, z: 9 }],
+      ]),
+    },
+  }
+  const joined = room as unknown as Parameters<typeof requestMatch>[0]
+  expect(requestMatch(joined)).toBe(false)
+  expect(send).not.toHaveBeenCalled()
+  player.z = 9
+  expect(canRequestMatch(joined)).toBe(true)
+  expect(requestMatch(joined)).toBe(true)
+  expect(send).toHaveBeenCalledExactlyOnceWith('match:join', null)
+  room.connection.isOpen = false
+  expect(requestMatch(joined)).toBe(false)
+  room.state.players.clear()
+  expect(canRequestMatch(joined)).toBe(false)
+})
 
 afterEach(() => {
   vi.useRealTimers()
