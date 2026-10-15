@@ -1,7 +1,7 @@
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CanvasTexture, type Group } from 'three'
-import { connect, sendMovement } from '../network/connect'
+import { sendMovement, type JoinedRoom } from '../network/connect'
 import { CharacterVisual } from './character/CharacterVisual'
 import type { KeyboardInput } from './input/KeyboardInput'
 import { LocalPrediction } from './localPrediction'
@@ -105,66 +105,46 @@ function RemotePlayerVisual({ target }: { target: RemotePlayer }) {
   )
 }
 
-export function RemotePlayers({ input }: { input: KeyboardInput }) {
+export function RemotePlayers({ input, room }: { input: KeyboardInput; room: JoinedRoom }) {
   const [players, setPlayers] = useState<RemotePlayer[]>([])
   const [localSessionId, setLocalSessionId] = useState<string>()
   const prediction = useRef(new LocalPrediction())
 
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).get('multiplayer') !== '1') return
-
-    let active = true
-    let room: Awaited<ReturnType<typeof connect>> | undefined
-    let update: (() => void) | undefined
-    let stopMovement: (() => void) | undefined
     const clear = () => {
-      stopMovement?.()
+      stopMovement()
       setPlayers([])
     }
-
-    void connect(undefined, `Player ${Math.floor(1000 + Math.random() * 9000)}`)
-      .then((joined) => {
-        if (!active) {
-          void joined.leave()
-          return
-        }
-        room = joined
-        const localPrediction = new LocalPrediction()
-        prediction.current = localPrediction
-        setLocalSessionId(joined.sessionId)
-        stopMovement = sendMovement(joined, () => localPrediction.drainInputs())
-        update = () => {
-          const players = joined.state?.players
-          if (!players) return
-          const local = players.get(joined.sessionId)
-          if (local) localPrediction.reconcile(local)
-          setPlayers(
-            Array.from(players, ([sessionId, transform]) => ({
-              sessionId,
-              x: transform.x,
-              y: transform.y,
-              z: transform.z,
-              rotation: transform.rotation,
-              displayName: transform.displayName,
-            }))
-          )
-        }
-        joined.onStateChange(update)
-        joined.onLeave(clear)
-        update()
-      })
-      .catch(console.error)
+    const localPrediction = new LocalPrediction()
+    prediction.current = localPrediction
+    setLocalSessionId(room.sessionId)
+    const stopMovement = sendMovement(room, () => localPrediction.drainInputs())
+    const update = () => {
+      const players = room.state?.players
+      if (!players) return
+      const local = players.get(room.sessionId)
+      if (local) localPrediction.reconcile(local)
+      setPlayers(
+        Array.from(players, ([sessionId, transform]) => ({
+          sessionId,
+          x: transform.x,
+          y: transform.y,
+          z: transform.z,
+          rotation: transform.rotation,
+          displayName: transform.displayName,
+        }))
+      )
+    }
+    room.onStateChange(update)
+    room.onLeave(clear)
+    update()
 
     return () => {
-      active = false
-      stopMovement?.()
-      if (room) {
-        if (update) room.onStateChange.remove(update)
-        room.onLeave.remove(clear)
-        void room.leave()
-      }
+      stopMovement()
+      room.onStateChange.remove(update)
+      room.onLeave.remove(clear)
     }
-  }, [input])
+  }, [room])
 
   return players.map((player) =>
     player.sessionId !== localSessionId ? (

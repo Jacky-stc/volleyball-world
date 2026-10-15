@@ -1,10 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { LocalPrediction } from '../game/localPrediction'
-import { sendMovement } from './connect'
+import { limitDisplayName, sendMovement } from './connect'
 
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+})
+
+it('limits a display name to 20 Unicode code points', () => {
+  expect(limitDisplayName('😀'.repeat(21))).toBe('😀'.repeat(20))
 })
 
 it('batches predicted commands periodically and flushes on blur and visibility without sending transforms', () => {

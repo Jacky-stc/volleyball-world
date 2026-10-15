@@ -7,25 +7,33 @@ import type { KeyboardInput } from './input/KeyboardInput'
 import { RemotePlayers } from './RemotePlayers'
 import { PrototypeScene } from './scenes/PrototypeScene'
 import type { LocalSimulation } from './simulation/LocalSimulation'
+import type { JoinedRoom } from '../network/connect'
 
 interface Props {
   simulation: LocalSimulation
   input: KeyboardInput
   onReady: () => void
+  room?: JoinedRoom
 }
-function World({ simulation, input, onReady }: Props) {
-  const multiplayer = new URLSearchParams(window.location.search).get('multiplayer') === '1'
+function World({ simulation, input, onReady, room }: Props) {
   useEffect(() => {
     onReady()
   }, [onReady])
   useFrame((_, delta) => {
-    if (!multiplayer) simulation.advance(delta, input.sample())
+    if (!room) simulation.advance(delta, input.sample())
   }, -1)
   return (
     <>
       <FixedCamera />
       <PrototypeScene />
-      {multiplayer ? <RemotePlayers input={input} /> : <CharacterView simulation={simulation} />}
+      {room ? (
+        <RemotePlayers
+          input={input}
+          room={room}
+        />
+      ) : (
+        <CharacterView simulation={simulation} />
+      )}
     </>
   )
 }

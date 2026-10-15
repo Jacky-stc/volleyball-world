@@ -5,11 +5,17 @@ export type PlayerState = { x: number; y: number; z: number; rotation: number; l
 export type MovementMessage = { x: number; z: number; sequence: number; durationMs: number }
 type ConnectionState = { players: Map<string, PlayerState> }
 
+export function limitDisplayName(value: string) {
+  return Array.from(value).slice(0, 20).join('')
+}
+
 // Explicit opt-in: offline gameplay never opens a network connection.
 // The caller owns the returned room and must call room.leave() when finished.
 export async function connect(endpoint = 'http://localhost:2567', displayName = 'Player') {
   return new Client(endpoint).joinOrCreate<ConnectionState>('connection', { displayName })
 }
+
+export type JoinedRoom = Awaited<ReturnType<typeof connect>>
 
 export function movementIntent(input: PlayerInput) {
   const x = Math.max(-1, Math.min(1, input.horizontal))
